@@ -11,7 +11,7 @@ If the faucet has enough funds you will receive 0.1 ETH to your Ethereum address
 * This code is published under the MIT License
 * This code has been deveoped by Jacob Suchorabski
 * Solidity (v. 0.7.4) has been used to develop and test the faucet
-* Remix has been used as an IDE to develop this code
+* You can find the frontend implementation in the `index.html` file which you can use to interface with the smart contract [here](http://172.104.138.53:8080/apps/faucet).
 
 ## Requirements & Demo
 

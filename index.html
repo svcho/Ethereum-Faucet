@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Ropsten Testnet Faucet for Ethereum">
+    <meta name="author" content="Jacob Suchorabski">
+    <link rel="canonical" href="https://getbootstrap.com/docs/3.3/examples/navbar/">
+
+    <title>Ropsten Faucet</title>
+
+    <!-- Latest compiled and minified CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+
+    <style>
+        body {
+            padding-top: 70px;
+            padding-bottom: 30px;
+        }
+        .theme-dropdown .dropdown-menu {
+            position: static;
+            display: block;
+            margin-bottom: 20px;
+        }
+
+        .theme-showcase > p > .btn {
+            margin: 5px 0;
+        }
+
+        .theme-showcase .navbar .container {
+            width: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container theme-showcase" role="main">
+    <div class="jumbotron">
+        <h1>Ethereum Faucet</h1>
+        <p>You can withdraw Ether from this Ropsten Faucet. Make sure to connect your wallet and switch to the Ropsten Testnet.</p>
+        <p>
+            <a class="btn btn-lg btn-primary" role="button" onclick="requestEther()">Request Ether</a>
+            <a class="btn btn-lg btn-success" role="button" onclick="donateEther()">Donate Ether</a>
+        </p>
+    </div>
+
+    <div class="page-header"><h2>Faucet Data</h2></div>
+    <div>
+        <h3>Contract Address: <a href="https://ropsten.etherscan.io/address/0x5194d3d2d77585ff89a2823f77c191a93d2f6416" target="_blank">0x5194d3D2D77585ff89a2823F77C191a93d2F6416</a></h3>
+        <h3 id="balance">Available Funds: (loading ...)</h3>
+        <h3 id="tx_result" class="text-info"></h3>
+    </div>
+</div>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.3.1/dist/web3.min.js" crossorigin="anonymous"></script>
+
+    <script>
+        const contract_address = '0x5194d3D2D77585ff89a2823F77C191a93d2F6416'
+        const contract_abi = [
+            {
+                "anonymous": false,
+                "inputs": [
+                    {
+                        "indexed": true,
+                        "internalType": "address",
+                        "name": "from",
+                        "type": "address"
+                    },
+                    {
+                        "indexed": false,
+                        "internalType": "uint256",
+                        "name": "amount",
+                        "type": "uint256"
+                    }
+                ],
+                "name": "Deposit",
+                "type": "event"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    {
+                        "indexed": true,
+                        "internalType": "address",
+                        "name": "to",
+                        "type": "address"
+                    }
+                ],
+                "name": "Withdrawal",
+                "type": "event"
+            },
+            {
+                "inputs": [],
+                "name": "destroy",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "stateMutability": "payable",
+                "type": "receive"
+            },
+            {
+                "inputs": [],
+                "name": "withdraw",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "stateMutability": "nonpayable",
+                "type": "constructor"
+            }
+        ]
+
+        window.addEventListener('load', function () {
+            if (typeof web3 !== 'undefined') {
+                web3 = new Web3(window.ethereum)
+            } else {
+                web3 = new Web3(new Web3.providers.HttpProvider('http://localhost:8545'));
+            }
+
+            new Promise((resolve, reject) => {
+                window.ethereum.enable();
+                resolve();
+            }).then(() =>{
+                getBalance();
+            });
+        })
+
+        function requestEther(){
+            new Promise((resolve, reject) => {
+                getAccounts(function(result) {
+                    const Faucet = new web3.eth.Contract(contract_abi, contract_address);
+                    Faucet.methods.withdraw().send({from:result[0]},function (error, result){
+                        if(!error){
+                            document.getElementById("tx_result").innerHTML = "TX created successfully with the hash: " + result;
+                        }else{
+                            document.getElementById("tx_result").innerHTML = error;
+                        }
+                    });
+                });
+                resolve();
+            });
+        }
+        function donateEther(){
+            var amount = prompt("How much Ether do you want to donate?", "0.5");
+            if(isNaN(parseInt(amount))){
+                document.getElementById("tx_result").innerHTML = "Error: Please input a valid number";
+            }else{
+                new Promise((resolve) => {
+                    getAccounts(function (result) {
+                        web3.eth.sendTransaction(
+                            {
+                                from: result[0],
+                                to: contract_address,
+                                value: web3.utils.toWei(amount, 'ether')
+                            }, function(err, transactionHash) {
+                                if (!err)
+                                    document.getElementById("tx_result").innerHTML = "TX created successfully with the hash: " + transactionHash;
+                            });
+                    });
+                });
+            }
+        }
+
+        function getAccounts(callback) {
+            web3.eth.getAccounts((error,result) => {
+                if (error) {
+                    console.log(error);
+                } else {
+                    callback(result);
+                }
+            });
+        }
+        function getBalance() {
+            try {
+                web3.eth.getBalance(contract_address, function (error, wei) {
+                    if (!error) {
+                        var balance = web3.utils.fromWei(wei, 'ether');
+                        document.getElementById("balance").innerHTML = "Available Funds: " + balance + " Ether";
+                    }
+                });
+            } catch (err) {
+                document.getElementById("balance").innerHTML = err;
+            }
+        }
+    </script>
+</body>
+</html>
