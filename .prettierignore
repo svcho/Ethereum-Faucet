@@ -1,0 +1,8 @@
+node_modules
+coverage
+dist
+build
+artifacts
+cache
+package-lock.json
+npm-debug.log*

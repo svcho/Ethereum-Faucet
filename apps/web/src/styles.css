@@ -1,0 +1,255 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  color-scheme: light;
+  --bg: #f6f4ee;
+  --card: #fffdfa;
+  --ink: #182028;
+  --muted: #5d6b78;
+  --line: rgba(24, 32, 40, 0.1);
+  --primary: #0f6bff;
+  --primary-strong: #0d56c7;
+  --secondary: #d94900;
+  --secondary-strong: #ab3700;
+  --shadow: 0 20px 60px rgba(27, 35, 43, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Space Grotesk', sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 20% 10%, rgba(15, 107, 255, 0.14), transparent 35%),
+    radial-gradient(circle at 90% 30%, rgba(217, 73, 0, 0.14), transparent 40%),
+    linear-gradient(120deg, #f7f2e8 0%, #eff8ff 50%, #fff3e9 100%);
+}
+
+.app-shell {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+}
+
+.hero {
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  border-radius: 24px;
+  padding: 2.2rem;
+  position: relative;
+  overflow: hidden;
+  animation: slide-up 520ms ease-out;
+}
+
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: auto -18% -35% auto;
+  width: 360px;
+  height: 360px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(15, 107, 255, 0.22), rgba(217, 73, 0, 0.15));
+  filter: blur(10px);
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--secondary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+h1 {
+  margin: 0.5rem 0 0.6rem;
+  font-size: clamp(1.7rem, 3vw, 2.8rem);
+  line-height: 1.1;
+}
+
+.hero p {
+  margin: 0;
+  max-width: 70ch;
+  color: var(--muted);
+}
+
+.hero-actions {
+  margin-top: 1.3rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+.grid {
+  margin-top: 1.2rem;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  border-radius: 20px;
+  padding: 1.3rem;
+  animation: slide-up 580ms ease-out;
+}
+
+.card h2 {
+  margin-top: 0;
+  margin-bottom: 0.8rem;
+  font-size: 1.25rem;
+}
+
+dl {
+  margin: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+dl div {
+  display: grid;
+  gap: 0.25rem;
+  border-top: 1px dashed var(--line);
+  padding-top: 0.55rem;
+}
+
+dl div:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+dt {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+dd {
+  margin: 0;
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.mono {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.84rem;
+}
+
+.action-card p {
+  margin: 0 0 1rem;
+  color: var(--muted);
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.9rem;
+}
+
+.field span {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+input {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  padding: 0.65rem 0.75rem;
+  font: inherit;
+  background: #ffffff;
+}
+
+input:focus {
+  outline: 2px solid rgba(15, 107, 255, 0.3);
+  border-color: var(--primary);
+}
+
+.button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 12px;
+  padding: 0.65rem 1rem;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    background 0.12s ease;
+}
+
+.button:hover {
+  transform: translateY(-1px);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.button-primary {
+  color: #ffffff;
+  background: linear-gradient(120deg, var(--primary), var(--primary-strong));
+  box-shadow: 0 8px 18px rgba(15, 107, 255, 0.32);
+}
+
+.button-secondary {
+  color: #ffffff;
+  background: linear-gradient(120deg, var(--secondary), var(--secondary-strong));
+  box-shadow: 0 8px 18px rgba(217, 73, 0, 0.26);
+}
+
+.status-bar {
+  margin-top: 1.2rem;
+  background: #111a22;
+  color: #d8e7f6;
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.status-bar p {
+  margin: 0;
+}
+
+.status-bar a {
+  color: #7dc0ff;
+  font-weight: 600;
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    padding: 1.3rem 0.9rem 2rem;
+  }
+
+  .hero,
+  .card {
+    border-radius: 16px;
+    padding: 1rem;
+  }
+}

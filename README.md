@@ -1,80 +1,274 @@
-# Ethereum Faucet
+# Modern Ethereum Faucet
 
-## Description
+A full rewrite of the original faucet into a modern, abuse-resistant architecture:
 
-This project is a basic Ethereum faucet that enables anyone to send Ether to the smart contract to fill it up with funds and you can interact with it through the withdraw function to request 0.1 ETH from the faucet.
+- Hardened Solidity faucet contract
+- API service that issues short-lived EIP-712 claim tickets
+- React dashboard for wallet auth, claims, and donations
+- Clean monorepo layout with explicit setup and ops docs
 
-If the faucet has enough funds you will receive 0.1 ETH to your Ethereum address. There is a simple timeout filter built in to only allow one request per 30 minutes.
+## Why this rewrite
 
-## Key Facts
+Legacy faucet implementations (single function + static frontend) are easy to drain with scripted wallets and botnets. Modern public faucets now combine:
 
-* This code is published under the MIT License
-* This code has been deveoped by Jacob Suchorabski
-* Solidity (v. 0.7.4) has been used to develop and test the faucet
-* You can find the frontend implementation in the `index.html` file which you can use to interface with the smart contract [here](https://svcho.github.io/Ethereum-Faucet/).
+- Wallet ownership proof (signed challenge)
+- Eligibility rules and rate limits
+- Short-lived signed claim authorization
+- On-chain replay/cooldown enforcement
+- Operational observability and explicit runbooks
 
-## Requirements & Demo
+This repository now follows that model.
 
-This version of the smart contract is deployed on the [Ropsten Testnetwork](https://ropsten.etherscan.io/) and you can find it with the following address:
+## GitHub Pages status
 
-[0x5194d3D2D77585ff89a2823F77C191a93d2F6416](https://ropsten.etherscan.io/address/0x5194d3D2D77585ff89a2823F77C191a93d2F6416)
+The legacy GitHub Pages frontend deployment was removed. This project is now run as a full-stack application (`apps/api` + `apps/web`) and deployed via your own hosting/runtime.
 
-If you want to use the smart contract you will need an Ethereum Wallet that can interact with smart contracts and switch to the Ropsten Testnetwork (Example: [MetaMask](https://metamask.io/)).
+## Architecture
 
-## Features
-
-### Variables & Events
-
-```Solidity
-address owner;
-mapping (address => uint) timeouts;
-    
-event Withdrawal(address indexed to);
-event Deposit(address indexed from, uint amount);
-    
-constructor() {
-    owner = msg.sender;
-}
-
-function destroy() public{
-		require(msg.sender == owner, "Only the owner of this faucet can destroy it.");
-		selfdestruct(msg.sender);
-}
+```text
+apps/web (React + viem)
+    |
+    | 1) POST /challenge
+    | 2) sign challenge with wallet
+    | 3) POST /ticket
+    v
+apps/api (Fastify + viem signer)
+    |
+    | validates: signature, captcha (optional), ip/address cooldown,
+    | on-chain claim eligibility, faucet balance
+    | issues EIP-712 ticket (nonce + deadline + signature)
+    v
+contracts/contracts/ModernEthFaucet.sol
+    |
+    | verifies ticket signer + nonce uniqueness + cooldown + wallet balance cap
+    | transfers drip amount and records next claim window
+    v
+recipient wallet
 ```
 
-* When creating the smart contract the owner will be saved in order to protect the `selfdestruct` method which destroys this smart contract and sends all remaining funds of the contract to the sender.
-* The `timeouts` hash map is used to track which address already used this faucet at which timestamp.
-* `Withdrawal` and `Deposit` are events that will be called in the functions described below to make sure that we store our transactions in the transaction log which can be accessed through the blockchain.
+## Repository layout
 
-### Withdrawing Ether
-
-```Solidity
-function withdraw() external{
-
-    require(address(this).balance >= 0.1 ether, "This faucet is empty. Please check back later.");
-    require(timeouts[msg.sender] <= block.timestamp - 30 minutes, "You can only withdraw once every 30 minutes. Please check back later.");
-
-    msg.sender.transfer(0.1 ether);
-    timeouts[msg.sender] = block.timestamp;
-
-    emit Withdrawal(msg.sender);
-    
-}
+```text
+.
+├── apps/
+│   ├── api/                 # Fastify backend issuing claim tickets
+│   └── web/                 # React frontend
+├── contracts/
+│   ├── contracts/           # Solidity contracts
+│   ├── scripts/             # Deployment scripts
+│   └── test/                # Hardhat tests
+├── package.json             # Workspace scripts
+└── tsconfig.base.json
 ```
 
-* We are checking for two simple requirements in this project
-  * Does this smart contract have enough funds? (This smart contract always sends exactly 0.1 ETH)
-  * Did the sender already request a withdrawal in the last 30 minutes? (Checked using the timestamp of the current block of the transaction)
-* If those conditions are met 0.1 ETH are sent to the `msg.sender` which is the entity calling the smart contract
-* Finally the current timestamp is added to our `timeouts` hashmap
+## Smart contract design
 
-### Donating Ether
+`contracts/contracts/ModernEthFaucet.sol`
 
-```Solidity
-receive() external payable {
-		emit Deposit(msg.sender, msg.value); 
-} 
+Key protections:
+
+- `claim(bytes32 nonce, uint256 deadline, bytes signature)`
+  - Verifies EIP-712 signature from trusted `claimSigner`
+  - Enforces one-time nonce usage (`usedNonces`)
+  - Enforces per-wallet cooldown (`nextEligibleAt`)
+  - Rejects over-funded recipient wallets (`maxRecipientBalanceWei`)
+  - Uses `call` + `nonReentrant` for payout safety
+- Owner controls:
+  - `setClaimSigner`
+  - `setFaucetConfig`
+  - `pause` / `unpause`
+  - `withdraw`
+- Donation support:
+  - `receive()` and `donate()` emit `DonationReceived`
+
+## API design
+
+`apps/api/src/index.ts`
+
+### Endpoints
+
+- `GET /api/v1/health`
+- `GET /api/v1/config`
+- `POST /api/v1/challenge`
+  - Input: wallet address
+  - Output: challenge message + challengeId + expiry
+- `POST /api/v1/ticket`
+  - Input: address, challengeId, wallet signature, optional captcha token
+  - Output: short-lived claim ticket (`nonce`, `deadline`, `signature`)
+
+### Eligibility checks before ticket issuance
+
+- Challenge signature validation (`verifyMessage`)
+- Optional Turnstile verification
+- Local IP + address cooldown gate
+- On-chain recipient cooldown check (`nextEligibleAt`)
+- Recipient wallet balance ceiling
+- Faucet liquidity check
+
+## Frontend design
+
+`apps/web/src/App.tsx`
+
+Features:
+
+- Wallet connection (EIP-1193)
+- Live faucet + wallet state
+- Challenge signing flow
+- Claim ticket request + on-chain `claim` execution
+- Donation transaction flow
+- Mobile/desktop responsive UI
+
+## Prerequisites
+
+- Node.js 20.x or 22.x LTS (Hardhat does not support Node 25)
+- npm 10+ or Bun 1.3+
+- A Sepolia-compatible RPC endpoint
+
+## Quick start
+
+### 1) Install dependencies
+
+```bash
+npm install
 ```
 
-* Ether can be donated by anyone by simply sending Ether to the smart contract
-* The `receive()` function is a default function that is payable so it can receive funds. You could also leave this function empty but since we want donations to be visible in the transaction log we are emitting our defined event.
+### 2) Configure environment files
+
+```bash
+cp contracts/.env.example contracts/.env
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
+```
+
+Fill all required variables, especially:
+
+- `contracts/.env`
+  - `SEPOLIA_RPC_URL`
+  - `DEPLOYER_PRIVATE_KEY`
+  - `FAUCET_OWNER`
+  - `TICKET_SIGNER_ADDRESS`
+- `apps/api/.env`
+  - `RPC_URL`
+  - `FAUCET_CONTRACT_ADDRESS`
+  - `TICKET_SIGNER_PRIVATE_KEY`
+- `apps/web/.env`
+  - `VITE_API_BASE_URL`
+  - `VITE_FAUCET_ADDRESS`
+
+### 3) Compile and test contracts
+
+```bash
+npm run contracts:test
+```
+
+### 4) Deploy faucet contract
+
+```bash
+npm run contracts:deploy
+```
+
+The deployment script can seed initial faucet balance via `INITIAL_FUNDING_WEI`.
+
+### 5) Run API and web apps
+
+```bash
+npm run dev
+```
+
+- API: [http://localhost:8787](http://localhost:8787)
+- Web: [http://localhost:5173](http://localhost:5173)
+
+## Configuration reference
+
+### `contracts/.env`
+
+| Variable                    | Description                                    |
+| --------------------------- | ---------------------------------------------- |
+| `SEPOLIA_RPC_URL`           | RPC endpoint used for deployment/verification. |
+| `HOLESKY_RPC_URL`           | Optional alternate network RPC endpoint.       |
+| `DEPLOYER_PRIVATE_KEY`      | Deployer wallet private key.                   |
+| `ETHERSCAN_API_KEY`         | Optional contract verification key.            |
+| `FAUCET_OWNER`              | Owner address for admin controls.              |
+| `TICKET_SIGNER_ADDRESS`     | Address allowed to sign claim tickets.         |
+| `DRIP_AMOUNT_WEI`           | Drip amount paid per successful claim.         |
+| `COOLDOWN_SECONDS`          | Minimum wait between claims per wallet.        |
+| `MAX_RECIPIENT_BALANCE_WEI` | Wallet balance ceiling for eligibility.        |
+| `INITIAL_FUNDING_WEI`       | Optional deploy-time faucet seed amount.       |
+
+### `apps/api/.env`
+
+| Variable                                           | Description                                  |
+| -------------------------------------------------- | -------------------------------------------- |
+| `HOST` / `PORT`                                    | API bind address/port.                       |
+| `WEB_ORIGIN`                                       | Allowed CORS origin for frontend.            |
+| `RPC_URL`                                          | RPC endpoint for on-chain checks.            |
+| `FAUCET_CHAIN_ID`                                  | Chain ID used in typed-data domain.          |
+| `FAUCET_CONTRACT_ADDRESS`                          | Deployed faucet contract address.            |
+| `FAUCET_DOMAIN_NAME` / `FAUCET_DOMAIN_VERSION`     | EIP-712 domain values (must match contract). |
+| `FAUCET_DRIP_WEI`                                  | Expected on-chain drip amount.               |
+| `FAUCET_COOLDOWN_SECONDS`                          | Expected on-chain cooldown.                  |
+| `FAUCET_MAX_RECIPIENT_BALANCE_WEI`                 | Eligibility balance cap.                     |
+| `TICKET_SIGNER_PRIVATE_KEY`                        | Private key used to sign claim tickets.      |
+| `CHALLENGE_TTL_SECONDS`                            | Signature challenge expiry window.           |
+| `TICKET_TTL_SECONDS`                               | Claim ticket expiry window.                  |
+| `ADDRESS_COOLDOWN_SECONDS` / `IP_COOLDOWN_SECONDS` | Local anti-abuse cooldown windows.           |
+| `TURNSTILE_SECRET_KEY`                             | Optional Cloudflare Turnstile secret.        |
+| `TURNSTILE_VERIFY_URL`                             | Turnstile verification endpoint.             |
+
+### `apps/web/.env`
+
+| Variable                  | Description                                      |
+| ------------------------- | ------------------------------------------------ |
+| `VITE_API_BASE_URL`       | Base URL of faucet API.                          |
+| `VITE_CHAIN_ID`           | Target chain ID for wallet switching.            |
+| `VITE_RPC_URL`            | Public RPC used for read operations.             |
+| `VITE_FAUCET_ADDRESS`     | Faucet contract address.                         |
+| `VITE_EXPLORER_BASE_URL`  | Explorer base URL for tx/address links.          |
+| `VITE_TURNSTILE_SITE_KEY` | Optional key for frontend Turnstile integration. |
+
+## Workspace commands
+
+```bash
+npm run dev
+npm run build
+npm run test
+npm run lint
+npm run format
+```
+
+## Security model
+
+Primary defense layers:
+
+- Off-chain challenge-response proves wallet control before ticket issuance.
+- Ticket signatures are EIP-712 typed data bound to recipient + nonce + deadline.
+- Contract-level nonce replay protection prevents ticket reuse.
+- Contract cooldown and max-balance checks provide deterministic anti-drain rules.
+- Optional captcha adds bot friction for public internet deployments.
+- Owner pause switch enables emergency shutdown.
+
+## Production hardening recommendations
+
+- Replace in-memory challenge/rate-limit storage with Redis.
+- Add reputation inputs (attestations, account age, allowlists, etc.) to API eligibility.
+- Move signer key into KMS/HSM; never keep long-lived plaintext secrets on disk.
+- Add structured logs + metrics (latency, deny reasons, claim success rates).
+- Add CI checks (lint, tests, static analysis, contract size limits).
+- Add multi-region RPC fallback and health probes.
+
+## Research references
+
+This rewrite follows patterns used by current public faucets and standards docs:
+
+- Ethereum test networks + faucet references: [ethereum.org testnets](https://ethereum.org/en/developers/docs/networks/)
+- Chainlink faucet wallet-first UX: [faucets.chain.link](https://faucets.chain.link/)
+- Alchemy faucet eligibility and cooldown model: [Alchemy Sepolia Faucet](https://www.alchemy.com/faucets/ethereum-sepolia)
+- QuickNode faucet anti-abuse FAQ and timing limits: [QuickNode Faucet](https://faucet.quicknode.com/ethereum/sepolia)
+- Typed signatures standard: [EIP-712](https://eips.ethereum.org/EIPS/eip-712)
+- Contract security primitives (ReentrancyGuard/Pausable): [OpenZeppelin Contracts docs](https://docs.openzeppelin.com/contracts/5.x/api/utils)
+- EIP-712 implementation helper: [OpenZeppelin EIP712 docs](https://docs.openzeppelin.com/contracts/5.x/api/utils/cryptography)
+- Captcha verification API: [Cloudflare Turnstile server-side validation](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/)
+
+## License
+
+MIT
